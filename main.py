@@ -190,7 +190,9 @@ class ChangeClickController:
             if self._detector.has_changed(baseline, current):
                 self._sender.tap()
                 with self._state_lock:
-                    self._baseline = current
+                    self._baseline = None
+                    self._monitoring = False
+                break
             time.sleep(self._poll_interval)
 
 
