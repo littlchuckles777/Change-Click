@@ -42,8 +42,8 @@ class PixelSampler:
     """Samples colours from the centre region of the primary monitor."""
 
     def __init__(self, cluster_offsets: Sequence[Tuple[int, int]] | None = None) -> None:
-        self._sct = mss.mss()
-        self._primary_monitor = self._sct.monitors[1]
+        self._thread_local: threading.local = threading.local()
+        self._primary_monitor = self._primary_monitor_geometry()
         self._cluster_offsets = cluster_offsets or self._default_offsets()
         self._sample_points: List[SamplePoint] = self._compute_sample_points()
 
@@ -63,6 +63,10 @@ class PixelSampler:
             (0, 2),
         ]
 
+    def _primary_monitor_geometry(self) -> dict:
+        with mss.mss() as sct:
+            return dict(sct.monitors[1])
+
     def _compute_sample_points(self) -> List[SamplePoint]:
         centre_x = self._primary_monitor["left"] + self._primary_monitor["width"] // 2
         centre_y = self._primary_monitor["top"] + self._primary_monitor["height"] // 2
@@ -72,6 +76,7 @@ class PixelSampler:
         """Capture the RGB colours for the configured sample points."""
 
         colours: List[RGB] = []
+        sct = self._thread_local_mss()
         for point in self._sample_points:
             region = {
                 "left": point.x,
@@ -79,9 +84,16 @@ class PixelSampler:
                 "width": 1,
                 "height": 1,
             }
-            screenshot: ScreenShot = self._sct.grab(region)
+            screenshot: ScreenShot = sct.grab(region)
             colours.append(screenshot.pixel(0, 0))
         return colours
+
+    def _thread_local_mss(self) -> mss.mss:
+        """Return an mss instance that is safe to use on the current thread."""
+
+        if not hasattr(self._thread_local, "sct"):
+            self._thread_local.sct = mss.mss()
+        return self._thread_local.sct
 
 
 class ChangeDetector:
